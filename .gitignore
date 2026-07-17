@@ -136,8 +136,6 @@ docs/*
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
 !docs/ASYNC_IMAGE_TASKS.md
-!docs/CUSTOM_FORK_WORKFLOW_CN.md
-!docs/SETUP_STATUS_CN.md
 !docs/legal/
 !docs/legal/*.md
 .serena/
@@ -145,3 +143,7 @@ docs/*
 frontend/coverage/
 aicodex
 output/
+!docs/CUSTOM_UPGRADE_DEPLOY_CN.md
+!docs/SETUP_STATUS_CN.md
+!docs/CUSTOM_FORK_WORKFLOW_CN.md
+!docs/BATCH_IMAGE_MVP.md
