@@ -438,6 +438,18 @@ export default {
         failed: 'Failed to update user limits'
       },
       editUser: 'Edit User',
+      // CUSTOM: lalala batch user actions
+      batchDisable: 'Batch Disable',
+      batchEnable: 'Batch Enable',
+      batchDelete: 'Batch Delete',
+      batchDeleteConfirm: 'Delete {count} selected users? This cannot be undone.',
+      batchDeleteDone: 'Deleted {deleted} users, skipped {skipped}',
+      batchDeleteSkipped: 'No users deleted (skipped {skipped})',
+      batchDeleteFailed: 'Batch delete failed',
+      batchDisableDone: 'Disabled {updated} users, skipped {skipped}',
+      batchEnableDone: 'Enabled {updated} users, skipped {skipped}',
+      batchStatusSkipped: 'No users updated (skipped {skipped})',
+      batchStatusFailed: 'Batch status update failed',
       deleteUser: 'Delete User',
       deleteConfirmMessage: "Are you sure you want to delete user '{email}'? This action cannot be undone.",
       searchPlaceholder: 'Search by email, username, notes, or API key...',

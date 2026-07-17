@@ -438,6 +438,18 @@ export default {
         failed: '批量更新用户限制失败'
       },
       editUser: '编辑用户',
+      // CUSTOM: lalala batch user actions
+      batchDisable: '批量禁用',
+      batchEnable: '批量启用',
+      batchDelete: '批量删除',
+      batchDeleteConfirm: '确定批量删除选中的 {count} 个用户吗？此操作无法撤销。',
+      batchDeleteDone: '已删除 {deleted} 个用户，跳过 {skipped} 个',
+      batchDeleteSkipped: '未删除任何用户（跳过 {skipped} 个）',
+      batchDeleteFailed: '批量删除失败',
+      batchDisableDone: '已禁用 {updated} 个用户，跳过 {skipped} 个',
+      batchEnableDone: '已启用 {updated} 个用户，跳过 {skipped} 个',
+      batchStatusSkipped: '未更新任何用户（跳过 {skipped} 个）',
+      batchStatusFailed: '批量更新用户状态失败',
       deleteUser: '删除用户',
       deleteConfirmMessage: "确定要删除用户 '{email}' 吗？此操作无法撤销。",
       searchPlaceholder: '邮箱/用户名/备注/API Key 模糊搜索...',

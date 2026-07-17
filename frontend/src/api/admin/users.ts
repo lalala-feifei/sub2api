@@ -216,6 +216,38 @@ export async function toggleStatus(id: number, status: 'active' | 'disabled'): P
   return update(id, { status })
 }
 
+// CUSTOM: lalala batch user actions
+export interface UserBatchSkipped {
+  id: number
+  reason: string
+}
+
+export interface BatchDeleteUsersResponse {
+  deleted_ids: number[]
+  skipped: UserBatchSkipped[]
+}
+
+export interface BatchUpdateUserStatusResponse {
+  updated_ids: number[]
+  skipped: UserBatchSkipped[]
+}
+
+export async function batchDelete(ids: number[]): Promise<BatchDeleteUsersResponse> {
+  const { data } = await apiClient.post<BatchDeleteUsersResponse>('/admin/users/batch-delete', { ids })
+  return data
+}
+
+export async function batchUpdateStatus(
+  ids: number[],
+  status: 'active' | 'disabled'
+): Promise<BatchUpdateUserStatusResponse> {
+  const { data } = await apiClient.post<BatchUpdateUserStatusResponse>('/admin/users/batch-status', {
+    ids,
+    status
+  })
+  return data
+}
+
 /**
  * Get user's API keys
  * @param id - User ID
@@ -409,6 +441,9 @@ export const usersAPI = {
   updateConcurrency,
   batchUpdateLimits,
   toggleStatus,
+  // CUSTOM: lalala batch user actions
+  batchDelete,
+  batchUpdateStatus,
   getUserApiKeys,
   getUserUsageStats,
   getUserBalanceHistory,

@@ -426,6 +426,68 @@ func (s *adminServiceImpl) deleteUserWithAPIKeys(ctx context.Context, userID int
 	return nil
 }
 
+
+// CUSTOM: lalala batch user actions
+func normalizeUserBatchIDs(ids []int64) []int64 {
+	if len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[int64]struct{}, len(ids))
+	cleaned := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		cleaned = append(cleaned, id)
+	}
+	return cleaned
+}
+
+// BatchDeleteUsers deletes multiple non-admin users, skipping protected or failed IDs.
+func (s *adminServiceImpl) BatchDeleteUsers(ctx context.Context, ids []int64) (*UserBatchDeleteResult, error) {
+	result := &UserBatchDeleteResult{
+		DeletedIDs: make([]int64, 0, len(ids)),
+		Skipped:    make([]UserBatchSkipped, 0),
+	}
+	for _, id := range normalizeUserBatchIDs(ids) {
+		if err := s.DeleteUser(ctx, id); err != nil {
+			result.Skipped = append(result.Skipped, UserBatchSkipped{
+				ID:     id,
+				Reason: err.Error(),
+			})
+			continue
+		}
+		result.DeletedIDs = append(result.DeletedIDs, id)
+	}
+	return result, nil
+}
+
+// BatchUpdateUserStatus updates status for multiple users, reusing single-user guards/cache invalidation.
+func (s *adminServiceImpl) BatchUpdateUserStatus(ctx context.Context, ids []int64, status string) (*UserBatchStatusResult, error) {
+	if status != StatusActive && status != StatusDisabled {
+		return nil, errors.New("invalid status: must be active or disabled")
+	}
+	result := &UserBatchStatusResult{
+		UpdatedIDs: make([]int64, 0, len(ids)),
+		Skipped:    make([]UserBatchSkipped, 0),
+	}
+	for _, id := range normalizeUserBatchIDs(ids) {
+		if _, err := s.UpdateUser(ctx, id, &UpdateUserInput{Status: status}); err != nil {
+			result.Skipped = append(result.Skipped, UserBatchSkipped{
+				ID:     id,
+				Reason: err.Error(),
+			})
+			continue
+		}
+		result.UpdatedIDs = append(result.UpdatedIDs, id)
+	}
+	return result, nil
+}
+
 func (s *adminServiceImpl) BatchUpdateConcurrency(ctx context.Context, userIDs []int64, value int, mode string) (int, error) {
 	cleaned := make([]int64, 0, len(userIDs))
 	for _, uid := range userIDs {

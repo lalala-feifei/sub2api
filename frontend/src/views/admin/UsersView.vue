@@ -252,6 +252,38 @@
               {{ t('admin.users.bulkLimits.action', { count: selectedCount }) }}
             </button>
 
+            <!-- CUSTOM: lalala batch user actions -->
+            <button
+              v-if="selectedCount > 0"
+              @click="handleBatchUpdateStatus('disabled')"
+              :disabled="batchUpdating"
+              class="btn btn-secondary px-2 md:px-3"
+              :title="t('admin.users.batchDisable')"
+            >
+              <Icon name="ban" size="md" class="md:mr-2" />
+              <span class="hidden md:inline">{{ t('admin.users.batchDisable') }}</span>
+            </button>
+            <button
+              v-if="selectedCount > 0"
+              @click="handleBatchUpdateStatus('active')"
+              :disabled="batchUpdating"
+              class="btn btn-secondary px-2 md:px-3"
+              :title="t('admin.users.batchEnable')"
+            >
+              <Icon name="checkCircle" size="md" class="md:mr-2" />
+              <span class="hidden md:inline">{{ t('admin.users.batchEnable') }}</span>
+            </button>
+            <button
+              v-if="selectedCount > 0"
+              @click="openBatchDelete"
+              :disabled="batchUpdating"
+              class="btn btn-danger px-2 md:px-3"
+              :title="t('admin.users.batchDelete')"
+            >
+              <Icon name="trash" size="md" class="md:mr-2" />
+              <span class="hidden md:inline">{{ t('admin.users.batchDelete') }}</span>
+            </button>
+
             <!-- Create User Button (full width on mobile, auto width on desktop) -->
             <button @click="showCreateModal = true" class="btn btn-primary flex-1 md:flex-initial">
               <Icon name="plus" size="md" class="mr-2" />
@@ -748,6 +780,15 @@
     </Teleport>
 
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.users.deleteUser')" :message="t('admin.users.deleteConfirm', { email: deletingUser?.email })" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
+    <!-- CUSTOM: lalala batch user actions -->
+    <ConfirmDialog
+      :show="showBatchDeleteDialog"
+      :title="t('admin.users.batchDelete')"
+      :message="t('admin.users.batchDeleteConfirm', { count: selectedCount })"
+      :danger="true"
+      @confirm="confirmBatchDelete"
+      @cancel="showBatchDeleteDialog = false"
+    />
     <UserCreateModal :show="showCreateModal" @close="showCreateModal = false" @success="loadUsers" />
     <UserEditModal :show="showEditModal" :user="editingUser" @close="closeEditModal" @success="loadUsers" />
     <BulkEditUserModal
@@ -1319,6 +1360,10 @@ const pagination = reactive({
 })
 
 const showCreateModal = ref(false)
+// CUSTOM: lalala batch user actions
+const batchUpdating = ref(false)
+const showBatchDeleteDialog = ref(false)
+
 const showEditModal = ref(false)
 const showBulkEditModal = ref(false)
 const showDeleteDialog = ref(false)
@@ -1782,6 +1827,86 @@ const confirmDelete = async () => {
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.users.failedToDelete'))
     console.error('Error deleting user:', error)
+  }
+}
+
+
+// CUSTOM: lalala batch user actions
+const getSelectedActionableIds = () => {
+  const selected = selectedIds.value || []
+  if (!selected.length) return [] as number[]
+  const byId = new Map(users.value.map((user) => [user.id, user]))
+  // Prefer filtering out known admin rows client-side; backend still enforces protection.
+  return selected.filter((id: number) => byId.get(id)?.role !== 'admin')
+}
+
+const openBatchDelete = () => {
+  if (selectedCount.value === 0 || batchUpdating.value) return
+  showBatchDeleteDialog.value = true
+}
+
+const confirmBatchDelete = async () => {
+  const ids = getSelectedActionableIds()
+  if (ids.length === 0) {
+    showBatchDeleteDialog.value = false
+    if (selectedCount.value > 0) {
+      appStore.showInfo(t('admin.users.batchDeleteSkipped', { skipped: selectedCount.value }))
+      clearSelection()
+    }
+    return
+  }
+
+  batchUpdating.value = true
+  try {
+    const result = await adminAPI.users.batchDelete(ids)
+    const deleted = result.deleted_ids?.length || 0
+    const skipped = result.skipped?.length || 0
+    if (deleted > 0) {
+      appStore.showSuccess(t('admin.users.batchDeleteDone', { deleted, skipped }))
+    } else if (skipped > 0) {
+      appStore.showInfo(t('admin.users.batchDeleteSkipped', { skipped }))
+    }
+    clearSelection()
+    showBatchDeleteDialog.value = false
+    await loadUsers()
+  } catch (error: any) {
+    appStore.showError(error.response?.data?.detail || error.response?.data?.message || t('admin.users.batchDeleteFailed'))
+    console.error('Error batch deleting users:', error)
+  } finally {
+    batchUpdating.value = false
+  }
+}
+
+const handleBatchUpdateStatus = async (status: 'active' | 'disabled') => {
+  if (selectedCount.value === 0 || batchUpdating.value) return
+  const ids = getSelectedActionableIds()
+  if (ids.length === 0) {
+    appStore.showInfo(t('admin.users.batchStatusSkipped', { skipped: selectedCount.value }))
+    clearSelection()
+    return
+  }
+
+  batchUpdating.value = true
+  try {
+    const result = await adminAPI.users.batchUpdateStatus(ids, status)
+    const updated = result.updated_ids?.length || 0
+    const skipped = result.skipped?.length || 0
+    if (updated > 0) {
+      appStore.showSuccess(
+        status === 'active'
+          ? t('admin.users.batchEnableDone', { updated, skipped })
+          : t('admin.users.batchDisableDone', { updated, skipped })
+      )
+    } else if (skipped > 0) {
+      appStore.showInfo(t('admin.users.batchStatusSkipped', { skipped }))
+    }
+    clearSelection()
+    await loadUsers()
+  } catch (error: any) {
+    appStore.showError(error.response?.data?.detail || error.response?.data?.message || t('admin.users.batchStatusFailed'))
+    console.error('Error batch updating user status:', error)
+  } finally {
+    batchUpdating.value = false
   }
 }
 

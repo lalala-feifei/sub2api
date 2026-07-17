@@ -727,3 +727,155 @@ func TestAdminService_BatchDeleteRedeemCodes_PartialFailures(t *testing.T) {
 	require.Equal(t, int64(2), deleted)
 	require.Equal(t, []int64{1, 2, 3}, repo.deletedIDs)
 }
+
+
+// CUSTOM: lalala batch user actions
+type multiUserRepoStub struct {
+	users      map[int64]*User
+	deletedIDs []int64
+	deleteErrs map[int64]error
+}
+
+func (s *multiUserRepoStub) Create(ctx context.Context, user *User) error {
+	panic("unexpected Create call")
+}
+func (s *multiUserRepoStub) GetByID(ctx context.Context, id int64) (*User, error) {
+	user, ok := s.users[id]
+	if !ok {
+		return nil, ErrUserNotFound
+	}
+	return user, nil
+}
+func (s *multiUserRepoStub) GetByEmail(ctx context.Context, email string) (*User, error) {
+	panic("unexpected GetByEmail call")
+}
+func (s *multiUserRepoStub) GetFirstAdmin(ctx context.Context) (*User, error) {
+	panic("unexpected GetFirstAdmin call")
+}
+func (s *multiUserRepoStub) Update(ctx context.Context, user *User) error {
+	s.users[user.ID] = user
+	return nil
+}
+func (s *multiUserRepoStub) Delete(ctx context.Context, id int64) error {
+	s.deletedIDs = append(s.deletedIDs, id)
+	if s.deleteErrs != nil {
+		if err, ok := s.deleteErrs[id]; ok {
+			return err
+		}
+	}
+	delete(s.users, id)
+	return nil
+}
+func (s *multiUserRepoStub) GetUserAvatar(ctx context.Context, userID int64) (*UserAvatar, error) {
+	panic("unexpected GetUserAvatar call")
+}
+func (s *multiUserRepoStub) UpsertUserAvatar(ctx context.Context, userID int64, input UpsertUserAvatarInput) (*UserAvatar, error) {
+	panic("unexpected UpsertUserAvatar call")
+}
+func (s *multiUserRepoStub) DeleteUserAvatar(ctx context.Context, userID int64) error {
+	panic("unexpected DeleteUserAvatar call")
+}
+func (s *multiUserRepoStub) List(ctx context.Context, params pagination.PaginationParams) ([]User, *pagination.PaginationResult, error) {
+	panic("unexpected List call")
+}
+func (s *multiUserRepoStub) ListWithFilters(ctx context.Context, params pagination.PaginationParams, filters UserListFilters) ([]User, *pagination.PaginationResult, error) {
+	panic("unexpected ListWithFilters call")
+}
+func (s *multiUserRepoStub) GetLatestUsedAtByUserIDs(ctx context.Context, userIDs []int64) (map[int64]*time.Time, error) {
+	panic("unexpected GetLatestUsedAtByUserIDs call")
+}
+func (s *multiUserRepoStub) GetLatestUsedAtByUserID(ctx context.Context, userID int64) (*time.Time, error) {
+	panic("unexpected GetLatestUsedAtByUserID call")
+}
+func (s *multiUserRepoStub) UpdateUserLastActiveAt(ctx context.Context, userID int64, activeAt time.Time) error {
+	panic("unexpected UpdateUserLastActiveAt call")
+}
+func (s *multiUserRepoStub) UpdateBalance(ctx context.Context, id int64, amount float64) error {
+	panic("unexpected UpdateBalance call")
+}
+func (s *multiUserRepoStub) DeductBalance(ctx context.Context, id int64, amount float64) error {
+	panic("unexpected DeductBalance call")
+}
+func (s *multiUserRepoStub) UpdateConcurrency(ctx context.Context, id int64, amount int) error {
+	panic("unexpected UpdateConcurrency call")
+}
+func (s *multiUserRepoStub) BatchSetConcurrency(context.Context, []int64, int) (int, error) {
+	return 0, nil
+}
+func (s *multiUserRepoStub) BatchAddConcurrency(context.Context, []int64, int) (int, error) {
+	return 0, nil
+}
+func (s *multiUserRepoStub) ExistsByEmail(ctx context.Context, email string) (bool, error) {
+	panic("unexpected ExistsByEmail call")
+}
+func (s *multiUserRepoStub) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {
+	panic("unexpected RemoveGroupFromAllowedGroups call")
+}
+func (s *multiUserRepoStub) RemoveGroupFromUserAllowedGroups(ctx context.Context, userID int64, groupID int64) error {
+	panic("unexpected RemoveGroupFromUserAllowedGroups call")
+}
+func (s *multiUserRepoStub) AddGroupToAllowedGroups(ctx context.Context, userID int64, groupID int64) error {
+	panic("unexpected AddGroupToAllowedGroups call")
+}
+func (s *multiUserRepoStub) ListUserAuthIdentities(ctx context.Context, userID int64) ([]UserAuthIdentityRecord, error) {
+	panic("unexpected ListUserAuthIdentities call")
+}
+func (s *multiUserRepoStub) UnbindUserAuthProvider(context.Context, int64, string) error {
+	panic("unexpected UnbindUserAuthProvider call")
+}
+func (s *multiUserRepoStub) UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error {
+	panic("unexpected UpdateTotpSecret call")
+}
+func (s *multiUserRepoStub) EnableTotp(ctx context.Context, userID int64) error {
+	panic("unexpected EnableTotp call")
+}
+func (s *multiUserRepoStub) DisableTotp(ctx context.Context, userID int64) error {
+	panic("unexpected DisableTotp call")
+}
+
+func TestAdminService_BatchDeleteUsers_PartialSuccess(t *testing.T) {
+	repo := &multiUserRepoStub{
+		users: map[int64]*User{
+			1: {ID: 1, Role: RoleAdmin, Status: StatusActive},
+			2: {ID: 2, Role: RoleUser, Status: StatusActive},
+			3: {ID: 3, Role: RoleUser, Status: StatusDisabled},
+		},
+	}
+	svc := &adminServiceImpl{userRepo: repo}
+
+	result, err := svc.BatchDeleteUsers(context.Background(), []int64{1, 2, 2, 0, 3})
+	require.NoError(t, err)
+	require.ElementsMatch(t, []int64{2, 3}, result.DeletedIDs)
+	require.Len(t, result.Skipped, 1)
+	require.Equal(t, int64(1), result.Skipped[0].ID)
+	require.Contains(t, result.Skipped[0].Reason, "cannot delete admin user")
+	require.ElementsMatch(t, []int64{2, 3}, repo.deletedIDs)
+}
+
+func TestAdminService_BatchUpdateUserStatus_PartialSuccess(t *testing.T) {
+	repo := &multiUserRepoStub{
+		users: map[int64]*User{
+			1: {ID: 1, Role: RoleAdmin, Status: StatusActive},
+			2: {ID: 2, Role: RoleUser, Status: StatusActive},
+			3: {ID: 3, Role: RoleUser, Status: StatusActive},
+		},
+	}
+	svc := &adminServiceImpl{userRepo: repo}
+
+	result, err := svc.BatchUpdateUserStatus(context.Background(), []int64{1, 2, 3, 3}, StatusDisabled)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []int64{2, 3}, result.UpdatedIDs)
+	require.Len(t, result.Skipped, 1)
+	require.Equal(t, int64(1), result.Skipped[0].ID)
+	require.Contains(t, result.Skipped[0].Reason, "cannot disable admin user")
+	require.Equal(t, StatusDisabled, repo.users[2].Status)
+	require.Equal(t, StatusDisabled, repo.users[3].Status)
+	require.Equal(t, StatusActive, repo.users[1].Status)
+}
+
+func TestAdminService_BatchUpdateUserStatus_InvalidStatus(t *testing.T) {
+	svc := &adminServiceImpl{userRepo: &multiUserRepoStub{users: map[int64]*User{}}}
+	result, err := svc.BatchUpdateUserStatus(context.Background(), []int64{1}, "paused")
+	require.Error(t, err)
+	require.Nil(t, result)
+}
