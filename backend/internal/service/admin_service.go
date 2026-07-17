@@ -32,6 +32,9 @@ type AdminService interface {
 	CreateUser(ctx context.Context, input *CreateUserInput) (*User, error)
 	UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error)
 	DeleteUser(ctx context.Context, id int64) error
+	// CUSTOM: lalala batch user actions
+	BatchDeleteUsers(ctx context.Context, ids []int64) (*UserBatchDeleteResult, error)
+	BatchUpdateUserStatus(ctx context.Context, ids []int64, status string) (*UserBatchStatusResult, error)
 	UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*User, error)
 	BatchUpdateConcurrency(ctx context.Context, userIDs []int64, value int, mode string) (int, error)
 	GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int, sortBy, sortOrder string) ([]APIKey, int64, error)
@@ -398,6 +401,25 @@ type GenerateRedeemCodesInput struct {
 	GroupID      *int64 // 订阅类型专用：关联的分组ID
 	ValidityDays int    // 订阅类型专用：有效天数
 	ExpiresAt    *time.Time
+}
+
+// CUSTOM: lalala batch user actions
+// UserBatchSkipped captures a skipped user during batch operations.
+type UserBatchSkipped struct {
+	ID     int64  `json:"id"`
+	Reason string `json:"reason"`
+}
+
+// UserBatchDeleteResult is the aggregated response for batch user deletion.
+type UserBatchDeleteResult struct {
+	DeletedIDs []int64            `json:"deleted_ids"`
+	Skipped    []UserBatchSkipped `json:"skipped"`
+}
+
+// UserBatchStatusResult is the aggregated response for batch user status updates.
+type UserBatchStatusResult struct {
+	UpdatedIDs []int64            `json:"updated_ids"`
+	Skipped    []UserBatchSkipped `json:"skipped"`
 }
 
 type ProxyBatchDeleteResult struct {
@@ -820,6 +842,67 @@ func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, id)
 	}
 	return nil
+}
+
+// CUSTOM: lalala batch user actions
+func normalizeUserBatchIDs(ids []int64) []int64 {
+	if len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[int64]struct{}, len(ids))
+	cleaned := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		cleaned = append(cleaned, id)
+	}
+	return cleaned
+}
+
+// BatchDeleteUsers deletes multiple non-admin users, skipping protected or failed IDs.
+func (s *adminServiceImpl) BatchDeleteUsers(ctx context.Context, ids []int64) (*UserBatchDeleteResult, error) {
+	result := &UserBatchDeleteResult{
+		DeletedIDs: make([]int64, 0, len(ids)),
+		Skipped:    make([]UserBatchSkipped, 0),
+	}
+	for _, id := range normalizeUserBatchIDs(ids) {
+		if err := s.DeleteUser(ctx, id); err != nil {
+			result.Skipped = append(result.Skipped, UserBatchSkipped{
+				ID:     id,
+				Reason: err.Error(),
+			})
+			continue
+		}
+		result.DeletedIDs = append(result.DeletedIDs, id)
+	}
+	return result, nil
+}
+
+// BatchUpdateUserStatus updates status for multiple users, reusing single-user guards/cache invalidation.
+func (s *adminServiceImpl) BatchUpdateUserStatus(ctx context.Context, ids []int64, status string) (*UserBatchStatusResult, error) {
+	if status != StatusActive && status != StatusDisabled {
+		return nil, errors.New("invalid status: must be active or disabled")
+	}
+	result := &UserBatchStatusResult{
+		UpdatedIDs: make([]int64, 0, len(ids)),
+		Skipped:    make([]UserBatchSkipped, 0),
+	}
+	for _, id := range normalizeUserBatchIDs(ids) {
+		if _, err := s.UpdateUser(ctx, id, &UpdateUserInput{Status: status}); err != nil {
+			result.Skipped = append(result.Skipped, UserBatchSkipped{
+				ID:     id,
+				Reason: err.Error(),
+			})
+			continue
+		}
+		result.UpdatedIDs = append(result.UpdatedIDs, id)
+	}
+	return result, nil
 }
 
 func (s *adminServiceImpl) BatchUpdateConcurrency(ctx context.Context, userIDs []int64, value int, mode string) (int, error) {

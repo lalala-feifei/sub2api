@@ -170,6 +170,15 @@ func (s *stubAdminService) DeleteUser(ctx context.Context, id int64) error {
 	return nil
 }
 
+// CUSTOM: lalala batch user actions
+func (s *stubAdminService) BatchDeleteUsers(ctx context.Context, ids []int64) (*service.UserBatchDeleteResult, error) {
+	return &service.UserBatchDeleteResult{DeletedIDs: ids, Skipped: []service.UserBatchSkipped{}}, nil
+}
+
+func (s *stubAdminService) BatchUpdateUserStatus(ctx context.Context, ids []int64, status string) (*service.UserBatchStatusResult, error) {
+	return &service.UserBatchStatusResult{UpdatedIDs: ids, Skipped: []service.UserBatchSkipped{}}, nil
+}
+
 func (s *stubAdminService) UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*service.User, error) {
 	user := service.User{ID: userID, Balance: balance, Status: service.StatusActive}
 	return &user, nil

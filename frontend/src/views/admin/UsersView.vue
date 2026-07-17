@@ -231,6 +231,35 @@
               </button>
             </div>
 
+            <!-- CUSTOM: lalala batch user actions -->
+            <button
+              @click="handleBatchUpdateStatus('disabled')"
+              :disabled="selectedCount === 0 || batchUpdating"
+              class="btn btn-secondary px-2 md:px-3"
+              :title="t('admin.users.batchDisable')"
+            >
+              <Icon name="ban" size="md" class="md:mr-2" />
+              <span class="hidden md:inline">{{ t('admin.users.batchDisable') }}</span>
+            </button>
+            <button
+              @click="handleBatchUpdateStatus('active')"
+              :disabled="selectedCount === 0 || batchUpdating"
+              class="btn btn-secondary px-2 md:px-3"
+              :title="t('admin.users.batchEnable')"
+            >
+              <Icon name="checkCircle" size="md" class="md:mr-2" />
+              <span class="hidden md:inline">{{ t('admin.users.batchEnable') }}</span>
+            </button>
+            <button
+              @click="openBatchDelete"
+              :disabled="selectedCount === 0 || batchUpdating"
+              class="btn btn-danger px-2 md:px-3"
+              :title="t('admin.users.batchDelete')"
+            >
+              <Icon name="trash" size="md" class="md:mr-2" />
+              <span class="hidden md:inline">{{ t('admin.users.batchDelete') }}</span>
+            </button>
+
             <!-- Create User Button (full width on mobile, auto width on desktop) -->
             <button @click="showCreateModal = true" class="btn btn-primary flex-1 md:flex-initial">
               <Icon name="plus" size="md" class="mr-2" />
@@ -242,6 +271,7 @@
 
       <!-- Users Table -->
       <template #table>
+        <div ref="userTableRef" class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <DataTable
           :columns="columns"
           :data="sortedUsers"
@@ -253,6 +283,27 @@
           :sort-storage-key="USER_SORT_STORAGE_KEY"
           @sort="handleSort"
         >
+          <!-- CUSTOM: lalala batch user actions -->
+          <template #header-select>
+            <input
+              type="checkbox"
+              class="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              :checked="allVisibleSelected"
+              @click.stop
+              @change="toggleSelectAllVisible($event)"
+            />
+          </template>
+
+          <template #cell-select="{ row }">
+            <input
+              type="checkbox"
+              class="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              :checked="selectedUserIds.has(row.id)"
+              @click.stop
+              @change="toggleSelectRow(row.id, $event)"
+            />
+          </template>
+
           <template #cell-email="{ value }">
             <div class="flex items-center gap-2">
               <div
@@ -608,6 +659,7 @@
             />
           </template>
         </DataTable>
+        </div>
       </template>
 
       <!-- Pagination -->
@@ -700,6 +752,15 @@
     </Teleport>
 
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.users.deleteUser')" :message="t('admin.users.deleteConfirm', { email: deletingUser?.email })" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
+    <!-- CUSTOM: lalala batch user actions -->
+    <ConfirmDialog
+      :show="showBatchDeleteDialog"
+      :title="t('admin.users.batchDelete')"
+      :message="t('admin.users.batchDeleteConfirm', { count: selectedCount })"
+      :danger="true"
+      @confirm="confirmBatchDelete"
+      @cancel="showBatchDeleteDialog = false"
+    />
     <UserCreateModal :show="showCreateModal" @close="showCreateModal = false" @success="loadUsers" />
     <UserEditModal :show="showEditModal" :user="editingUser" @close="closeEditModal" @success="loadUsers" />
     <UserApiKeysModal :show="showApiKeysModal" :user="viewingUser" @close="closeApiKeysModal" />
@@ -716,6 +777,8 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
+import { useSwipeSelect } from '@/composables/useSwipeSelect'
+import { useTableSelection } from '@/composables/useTableSelection'
 import { formatDateTime } from '@/utils/format'
 import Icon from '@/components/icons/Icon.vue'
 
@@ -794,6 +857,8 @@ const getAttributeValue = (userId: number, attrId: number): string => {
 
 // All possible columns (for column settings)
 const allColumns = computed<Column[]>(() => [
+  // CUSTOM: lalala batch user actions - selection column always visible
+  { key: 'select', label: '', sortable: false },
   { key: 'email', label: t('admin.users.columns.user'), sortable: true },
   { key: 'id', label: t('admin.users.columns.id'), sortable: true },
   { key: 'username', label: t('admin.users.columns.username'), sortable: true },
@@ -819,7 +884,7 @@ const allColumns = computed<Column[]>(() => [
 
 // Columns that can be toggled (exclude email and actions which are always visible)
 const toggleableColumns = computed(() =>
-  allColumns.value.filter(col => col.key !== 'email' && col.key !== 'actions')
+  allColumns.value.filter(col => col.key !== 'select' && col.key !== 'email' && col.key !== 'actions')
 )
 
 // Hidden columns (stored in Set - columns NOT in this set are visible)
@@ -945,12 +1010,37 @@ const hasVisibleAttributeColumns = computed(() =>
 // Filtered columns based on visibility
 const columns = computed<Column[]>(() =>
   allColumns.value.filter(col =>
-    col.key === 'email' || col.key === 'actions' || !hiddenColumns.has(col.key)
+    col.key === 'select' || col.key === 'email' || col.key === 'actions' || !hiddenColumns.has(col.key)
   )
 )
 
 const users = ref<AdminUser[]>([])
 const loading = ref(false)
+// CUSTOM: lalala batch user actions
+const userTableRef = ref<HTMLElement | null>(null)
+const {
+  selectedSet: selectedUserIds,
+  selectedCount,
+  allVisibleSelected,
+  isSelected,
+  select,
+  deselect,
+  clear: clearSelectedUsers,
+  removeMany: removeSelectedUsers,
+  toggleVisible,
+  batchUpdate
+} = useTableSelection<AdminUser>({
+  rows: users,
+  getId: (user) => user.id
+})
+useSwipeSelect(userTableRef, {
+  isSelected,
+  select,
+  deselect,
+  batchUpdate
+})
+const batchUpdating = ref(false)
+const showBatchDeleteDialog = ref(false)
 const searchQuery = ref('')
 const USER_SORT_STORAGE_KEY = 'admin-users-table-sort'
 const loadInitialSortState = (): { sort_by: string; sort_order: 'asc' | 'desc' } => {
@@ -1600,11 +1690,105 @@ const confirmDelete = async () => {
     await adminAPI.users.delete(deletingUser.value.id)
     appStore.showSuccess(t('common.success'))
     showDeleteDialog.value = false
+    removeSelectedUsers([deletingUser.value.id])
     deletingUser.value = null
     loadUsers()
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.users.failedToDelete'))
     console.error('Error deleting user:', error)
+  }
+}
+
+// CUSTOM: lalala batch user actions
+const toggleSelectRow = (id: number, event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target.checked) {
+    select(id)
+    return
+  }
+  deselect(id)
+}
+
+const toggleSelectAllVisible = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  toggleVisible(target.checked)
+}
+
+const getSelectedActionableIds = () => {
+  const selected = Array.from(selectedUserIds.value)
+  if (selected.length === 0) return [] as number[]
+  const byId = new Map(users.value.map((user) => [user.id, user]))
+  // Prefer filtering out known admin rows client-side; backend still enforces protection.
+  return selected.filter((id) => byId.get(id)?.role !== 'admin')
+}
+
+const openBatchDelete = () => {
+  if (selectedCount.value === 0 || batchUpdating.value) return
+  showBatchDeleteDialog.value = true
+}
+
+const confirmBatchDelete = async () => {
+  const ids = getSelectedActionableIds()
+  if (ids.length === 0) {
+    showBatchDeleteDialog.value = false
+    if (selectedCount.value > 0) {
+      appStore.showInfo(t('admin.users.batchDeleteSkipped', { skipped: selectedCount.value }))
+      clearSelectedUsers()
+    }
+    return
+  }
+
+  batchUpdating.value = true
+  try {
+    const result = await adminAPI.users.batchDelete(ids)
+    const deleted = result.deleted_ids?.length || 0
+    const skipped = result.skipped?.length || 0
+    if (deleted > 0) {
+      appStore.showSuccess(t('admin.users.batchDeleteDone', { deleted, skipped }))
+    } else if (skipped > 0) {
+      appStore.showInfo(t('admin.users.batchDeleteSkipped', { skipped }))
+    }
+    clearSelectedUsers()
+    showBatchDeleteDialog.value = false
+    await loadUsers()
+  } catch (error: any) {
+    appStore.showError(error.response?.data?.detail || t('admin.users.batchDeleteFailed'))
+    console.error('Error batch deleting users:', error)
+  } finally {
+    batchUpdating.value = false
+  }
+}
+
+const handleBatchUpdateStatus = async (status: 'active' | 'disabled') => {
+  if (selectedCount.value === 0 || batchUpdating.value) return
+  const ids = getSelectedActionableIds()
+  if (ids.length === 0) {
+    appStore.showInfo(t('admin.users.batchStatusSkipped', { skipped: selectedCount.value }))
+    clearSelectedUsers()
+    return
+  }
+
+  batchUpdating.value = true
+  try {
+    const result = await adminAPI.users.batchUpdateStatus(ids, status)
+    const updated = result.updated_ids?.length || 0
+    const skipped = result.skipped?.length || 0
+    if (updated > 0) {
+      appStore.showSuccess(
+        status === 'active'
+          ? t('admin.users.batchEnableDone', { updated, skipped })
+          : t('admin.users.batchDisableDone', { updated, skipped })
+      )
+    } else if (skipped > 0) {
+      appStore.showInfo(t('admin.users.batchStatusSkipped', { skipped }))
+    }
+    clearSelectedUsers()
+    await loadUsers()
+  } catch (error: any) {
+    appStore.showError(error.response?.data?.detail || t('admin.users.batchStatusFailed'))
+    console.error('Error batch updating user status:', error)
+  } finally {
+    batchUpdating.value = false
   }
 }
 

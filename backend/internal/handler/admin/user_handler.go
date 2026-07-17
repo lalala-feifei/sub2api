@@ -310,6 +310,50 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	response.Success(c, gin.H{"message": "User deleted successfully"})
 }
 
+// CUSTOM: lalala batch user actions
+// BatchDelete handles batch deleting users
+// POST /api/v1/admin/users/batch-delete
+func (h *UserHandler) BatchDelete(c *gin.Context) {
+	type BatchDeleteRequest struct {
+		IDs []int64 `json:"ids" binding:"required,min=1,max=500"`
+	}
+
+	var req BatchDeleteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	result, err := h.adminService.BatchDeleteUsers(c.Request.Context(), req.IDs)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
+// BatchUpdateStatus handles batch enabling/disabling users
+// POST /api/v1/admin/users/batch-status
+func (h *UserHandler) BatchUpdateStatus(c *gin.Context) {
+	type BatchUpdateStatusRequest struct {
+		IDs    []int64 `json:"ids" binding:"required,min=1,max=500"`
+		Status string  `json:"status" binding:"required,oneof=active disabled"`
+	}
+
+	var req BatchUpdateStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	result, err := h.adminService.BatchUpdateUserStatus(c.Request.Context(), req.IDs, req.Status)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
 // UpdateBalance handles updating user balance
 // POST /api/v1/admin/users/:id/balance
 func (h *UserHandler) UpdateBalance(c *gin.Context) {
