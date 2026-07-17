@@ -746,6 +746,9 @@ func (s *multiUserRepoStub) GetByID(ctx context.Context, id int64) (*User, error
 	}
 	return user, nil
 }
+func (s *multiUserRepoStub) GetByIDIncludeDeleted(ctx context.Context, id int64) (*User, error) {
+	return s.GetByID(ctx, id)
+}
 func (s *multiUserRepoStub) GetByEmail(ctx context.Context, email string) (*User, error) {
 	panic("unexpected GetByEmail call")
 }
@@ -805,6 +808,11 @@ func (s *multiUserRepoStub) BatchSetConcurrency(context.Context, []int64, int) (
 func (s *multiUserRepoStub) BatchAddConcurrency(context.Context, []int64, int) (int, error) {
 	return 0, nil
 }
+
+func (s *multiUserRepoStub) BatchUpdateLimits(context.Context, []int64, *int, *int) (int, error) {
+	return 0, nil
+}
+
 func (s *multiUserRepoStub) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	panic("unexpected ExistsByEmail call")
 }

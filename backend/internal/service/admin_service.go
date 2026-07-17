@@ -476,6 +476,26 @@ type GenerateRedeemCodesInput struct {
 	ExpiresAt    *time.Time
 }
 
+
+// CUSTOM: lalala batch user actions
+// UserBatchSkipped captures a skipped user during batch operations.
+type UserBatchSkipped struct {
+	ID     int64  `json:"id"`
+	Reason string `json:"reason"`
+}
+
+// UserBatchDeleteResult is the aggregated response for batch user deletion.
+type UserBatchDeleteResult struct {
+	DeletedIDs []int64            `json:"deleted_ids"`
+	Skipped    []UserBatchSkipped `json:"skipped"`
+}
+
+// UserBatchStatusResult is the aggregated response for batch user status updates.
+type UserBatchStatusResult struct {
+	UpdatedIDs []int64            `json:"updated_ids"`
+	Skipped    []UserBatchSkipped `json:"skipped"`
+}
+
 type ProxyBatchDeleteResult struct {
 	DeletedIDs []int64                   `json:"deleted_ids"`
 	Skipped    []ProxyBatchDeleteSkipped `json:"skipped"`
