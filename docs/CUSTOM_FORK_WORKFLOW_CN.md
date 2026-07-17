@@ -1,3 +1,5 @@
+> **实操发布手册（推荐先看）**：[CUSTOM_UPGRADE_DEPLOY_CN.md](./CUSTOM_UPGRADE_DEPLOY_CN.md)
+
 # Sub2API 定制 Fork 工作流
 
 > 适用仓库：[`lalala-feifei/sub2api`](https://github.com/lalala-feifei/sub2api)  
